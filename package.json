@@ -10,8 +10,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@dataforsyningen/saul": "^4.2.0",
     "jspdf": "^2.5.2",
     "lucide-react": "^0.454.0",
+    "ol": "^10.10.0",
+    "proj4": "^2.22.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

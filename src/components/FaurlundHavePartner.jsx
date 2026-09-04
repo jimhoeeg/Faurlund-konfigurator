@@ -48,6 +48,13 @@ import {
   X,
 } from "lucide-react";
 
+import { hasSkraafotoAccess } from "../skraafoto/skraafotoConfig.js";
+
+/* Kortet trækker OpenLayers og GeoTIFF-læsning med sig — tilsammen langt det
+   tungeste i modulet. Det hentes derfor først, når kunden rent faktisk vælger
+   luftfoto-vejen, så resten af modulet er hurtigt oppe. */
+const SkraafotoHaveKort = React.lazy(() => import("./SkraafotoHaveKort.jsx"));
+
 /* ==========================================================================
    1. BRAND — farver, typografi og småting hentet fra faurlund.dk
    ========================================================================== */
@@ -921,11 +928,137 @@ function ProgressBar({ step, maxReached, onJump }) {
    TRIN 1 — Kortlæg projektet
    ========================================================================== */
 
+/** Palet til at vælge, hvilken slags arbejde næste nål skal markere. */
+function KategoriPalet({ activeCat, update }) {
+  return (
+    <div>
+      <p className="mb-2 text-[15px] font-semibold uppercase tracking-[0.14em] text-stone-500">
+        Vælg hvad du vil markere
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {CATEGORY_KEYS.map((key) => {
+          const cat = CATEGORIES[key];
+          const Icon = cat.icon;
+          const active = activeCat === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => update({ activeCat: key })}
+              aria-pressed={active}
+              className={cx(
+                "flex items-center gap-2 rounded-full border px-4 py-2 text-[16px] font-medium transition",
+                active
+                  ? "border-transparent text-white shadow-sm"
+                  : "border-stone-300 bg-white text-stone-600 hover:border-stone-400"
+              )}
+              style={active ? { background: BRAND.green } : undefined}
+            >
+              <Icon className="h-4 w-4" aria-hidden="true" />
+              {cat.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Listen over satte nåle med mængder. Fælles for luftfoto og upload. */
+function NaaleListe({ pins, update }) {
+  if (!pins.length) return null;
+
+  const setQty = (id, qty) =>
+    update({
+      pins: pins.map((p) =>
+        p.id === id
+          ? { ...p, qty: qty === "" ? "" : Math.max(0, Number(qty)), measured: false }
+          : p
+      ),
+    });
+
+  const anyMeasured = pins.some((p) => p.measured);
+
+  return (
+    <div className="rounded-xl border border-stone-200 bg-white">
+      <div className="border-b border-stone-100 px-4 py-3">
+        <p className="text-[15px] font-semibold uppercase tracking-[0.14em] text-stone-500">
+          Mængder
+        </p>
+        <p className="text-[15px] text-stone-400">
+          {anyMeasured
+            ? "Opmålte tal er hentet fra luftfotoet. Du kan rette dem, hvis du kender de rigtige."
+            : "Gæt roligt — vi måler op på stedet, inden vi giver en fast pris."}
+        </p>
+      </div>
+      <ul className="divide-y divide-stone-100">
+        {pins.map((pin, i) => {
+          const cat = CATEGORIES[pin.cat];
+          const Icon = cat.icon;
+          return (
+            <li key={pin.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+              <span
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[13px] font-bold text-white"
+                style={{ background: cat.color }}
+              >
+                {i + 1}
+              </span>
+              <span className="flex min-w-0 flex-1 items-center gap-2 font-medium text-stone-700">
+                <Icon className="h-4 w-4 text-stone-400" aria-hidden="true" />
+                <span className="truncate">{cat.label}</span>
+                {pin.measured && (
+                  <span
+                    className="shrink-0 rounded-full px-2 py-0.5 text-[13px] font-semibold uppercase tracking-wider"
+                    style={{ background: BRAND.sage, color: BRAND.greenDark }}
+                  >
+                    Opmålt
+                  </span>
+                )}
+              </span>
+              <label className="flex items-center gap-2">
+                <span className="sr-only">
+                  Mængde for {cat.label} i {cat.unit}
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  inputMode="numeric"
+                  value={pin.qty}
+                  onChange={(e) => setQty(pin.id, e.target.value)}
+                  className="w-24 rounded-md border border-stone-300 px-3 py-2 text-right tabular-nums focus:border-lime-600 focus:outline-none focus:ring-2 focus:ring-lime-200"
+                />
+                <span className="w-10 text-[15px] text-stone-500">{cat.unit}</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => update({ pins: pins.filter((p) => p.id !== pin.id) })}
+                aria-label={`Fjern nål ${i + 1}`}
+                className="rounded p-2 text-stone-400 transition hover:bg-red-50 hover:text-red-600"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 function Step1Kortlaeg({ state, update }) {
-  const { image, pins, activeCat } = state;
+  const { image, pins, activeCat, source } = state;
   const [lastPinnedCat, setLastPinnedCat] = useState(null);
+  const prevCount = useRef(pins.length);
   const fileRef = useRef(null);
   const objectUrlRef = useRef(null);
+
+  // Uanset om nålen kom fra luftfoto eller upload, skal infoboksen poppe op.
+  useEffect(() => {
+    if (pins.length > prevCount.current) {
+      setLastPinnedCat(pins[pins.length - 1].cat);
+    }
+    prevCount.current = pins.length;
+  }, [pins]);
 
   useEffect(() => {
     return () => {
@@ -950,35 +1083,55 @@ function Step1Kortlaeg({ state, update }) {
     if (x < 0 || x > 100 || y < 0 || y > 100) return;
     const cat = CATEGORIES[activeCat];
     update({
-      pins: [
-        ...pins,
-        { id: uid(), cat: activeCat, x, y, qty: cat.defaultQty, note: "" },
-      ],
+      pins: [...pins, { id: uid(), cat: activeCat, x, y, qty: cat.defaultQty }],
     });
-    setLastPinnedCat(activeCat);
   };
 
-  const removePin = (id) => update({ pins: pins.filter((p) => p.id !== id) });
-
-  const setQty = (id, qty) =>
-    update({
-      pins: pins.map((p) =>
-        p.id === id ? { ...p, qty: qty === "" ? "" : Math.max(0, Number(qty)) } : p
-      ),
-    });
-
   const eduCat = lastPinnedCat ? CATEGORIES[lastPinnedCat] : null;
+  const eduBoks = eduCat && (
+    <EducationBox
+      title={eduCat.education.title}
+      icon={eduCat.icon}
+      onClose={() => setLastPinnedCat(null)}
+    >
+      {eduCat.education.body}
+    </EducationBox>
+  );
 
   return (
     <div className="space-y-6">
       <SectionHeading eyebrow="Trin 1" title="Kortlæg dit projekt">
-        Tag et billede af haven — eller upload en tegning. Sæt derefter en nål
-        dér, hvor arbejdet skal ske. Jo flere nåle, jo mere præcist bliver dit
-        estimat.
+        {source === "skraafoto"
+          ? "Find din adresse, så henter vi et luftfoto af grunden. Sæt en nål dér, hvor arbejdet skal ske — eller mål arealet op direkte på billedet."
+          : "Tag et billede af haven — eller upload en tegning. Sæt derefter en nål dér, hvor arbejdet skal ske. Jo flere nåle, jo mere præcist bliver dit estimat."}
       </SectionHeading>
 
-      {/* --- Upload ------------------------------------------------------ */}
-      {!image ? (
+      {source === "skraafoto" ? (
+        <>
+          <KategoriPalet activeCat={activeCat} update={update} />
+          <React.Suspense
+            fallback={
+              <div className="flex h-[320px] items-center justify-center rounded-xl border border-stone-200 bg-stone-50 sm:h-[440px]">
+                <span className="flex items-center gap-2 text-[16px] text-stone-500">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Klargør kortet…
+                </span>
+              </div>
+            }
+          >
+            <SkraafotoHaveKort
+              pins={pins}
+              onPinsChange={(next) => update({ pins: next })}
+              activeCat={activeCat}
+              categories={CATEGORIES}
+              brand={BRAND}
+              onUseUpload={() => update({ source: "upload" })}
+            />
+          </React.Suspense>
+          {eduBoks}
+          <NaaleListe pins={pins} update={update} />
+        </>
+      ) : !image ? (
         <div
           className="rounded-xl border-2 border-dashed p-8 text-center sm:p-12"
           style={{ borderColor: BRAND.sageDeep, background: "#fbfcf8" }}
@@ -1016,48 +1169,28 @@ function Step1Kortlaeg({ state, update }) {
             className="hidden"
             onChange={handleFile}
           />
+
+          {hasSkraafotoAccess() && (
+            <button
+              type="button"
+              onClick={() => update({ source: "skraafoto" })}
+              className="mt-4 block w-full text-[16px] text-stone-500 underline underline-offset-4 hover:text-stone-800"
+            >
+              Eller find din adresse og brug et luftfoto
+            </button>
+          )}
+
           <p className="mt-4 text-[15px] text-stone-400">
             Billedet forlader ikke din browser, før du selv sender rapporten.
           </p>
         </div>
       ) : (
         <>
-          {/* --- Kategori-palet ------------------------------------------ */}
-          <div>
-            <p className="mb-2 text-[15px] font-semibold uppercase tracking-[0.14em] text-stone-500">
-              1. Vælg hvad du vil markere
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {CATEGORY_KEYS.map((key) => {
-                const cat = CATEGORIES[key];
-                const Icon = cat.icon;
-                const active = activeCat === key;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => update({ activeCat: active ? null : key })}
-                    aria-pressed={active}
-                    className={cx(
-                      "flex items-center gap-2 rounded-full border px-4 py-2 text-[16px] font-medium transition",
-                      active
-                        ? "border-transparent text-white shadow-sm"
-                        : "border-stone-300 bg-white text-stone-600 hover:border-stone-400"
-                    )}
-                    style={active ? { background: BRAND.green } : undefined}
-                  >
-                    <Icon className="h-4 w-4" aria-hidden="true" />
-                    {cat.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <KategoriPalet activeCat={activeCat} update={update} />
 
-          {/* --- Billede med nåle ---------------------------------------- */}
           <div>
             <p className="mb-2 text-[15px] font-semibold uppercase tracking-[0.14em] text-stone-500">
-              2. Klik på billedet for at sætte nålen
+              Klik på billedet for at sætte nålen
             </p>
             <div
               onClick={placePin}
@@ -1066,12 +1199,7 @@ function Step1Kortlaeg({ state, update }) {
                 activeCat ? "cursor-crosshair" : "cursor-default"
               )}
             >
-              <img
-                src={image}
-                alt="Din have"
-                className="block w-full"
-                draggable={false}
-              />
+              <img src={image} alt="Din have" className="block w-full" draggable={false} />
 
               {!activeCat && (
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-4 text-center">
@@ -1082,6 +1210,7 @@ function Step1Kortlaeg({ state, update }) {
               )}
 
               {pins.map((pin, i) => {
+                if (pin.x === undefined) return null;
                 const cat = CATEGORIES[pin.cat];
                 const Icon = cat.icon;
                 return (
@@ -1101,10 +1230,7 @@ function Step1Kortlaeg({ state, update }) {
                     >
                       <Icon className="h-4 w-4 text-white" aria-hidden="true" />
                     </span>
-                    <span
-                      className="h-3 w-0.5"
-                      style={{ background: cat.color }}
-                    />
+                    <span className="h-3 w-0.5" style={{ background: cat.color }} />
                   </span>
                 );
               })}
@@ -1114,9 +1240,7 @@ function Step1Kortlaeg({ state, update }) {
               <span>
                 {pins.length === 0
                   ? "Ingen nåle sat endnu"
-                  : `${pins.length} ${
-                      pins.length === 1 ? "nål" : "nåle"
-                    } placeret`}
+                  : `${pins.length} ${pins.length === 1 ? "nål" : "nåle"} placeret`}
               </span>
               <button
                 type="button"
@@ -1135,82 +1259,14 @@ function Step1Kortlaeg({ state, update }) {
             </div>
           </div>
 
-          {/* --- Pædagogisk pop-op --------------------------------------- */}
-          {eduCat && (
-            <EducationBox
-              title={eduCat.education.title}
-              icon={eduCat.icon}
-              onClose={() => setLastPinnedCat(null)}
-            >
-              {eduCat.education.body}
-            </EducationBox>
-          )}
-
-          {/* --- Nålelisten med mængder ---------------------------------- */}
-          {pins.length > 0 && (
-            <div className="rounded-xl border border-stone-200 bg-white">
-              <div className="border-b border-stone-100 px-4 py-3">
-                <p className="text-[15px] font-semibold uppercase tracking-[0.14em] text-stone-500">
-                  3. Sæt cirka-mængderne
-                </p>
-                <p className="text-[15px] text-stone-400">
-                  Gæt roligt — vi måler op på stedet, inden vi giver en fast pris.
-                </p>
-              </div>
-              <ul className="divide-y divide-stone-100">
-                {pins.map((pin, i) => {
-                  const cat = CATEGORIES[pin.cat];
-                  const Icon = cat.icon;
-                  return (
-                    <li
-                      key={pin.id}
-                      className="flex flex-wrap items-center gap-3 px-4 py-3"
-                    >
-                      <span
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[13px] font-bold text-white"
-                        style={{ background: cat.color }}
-                      >
-                        {i + 1}
-                      </span>
-                      <span className="flex min-w-0 flex-1 items-center gap-2 font-medium text-stone-700">
-                        <Icon className="h-4 w-4 text-stone-400" aria-hidden="true" />
-                        <span className="truncate">{cat.label}</span>
-                      </span>
-                      <label className="flex items-center gap-2">
-                        <span className="sr-only">
-                          Mængde for {cat.label} i {cat.unit}
-                        </span>
-                        <input
-                          type="number"
-                          min="0"
-                          inputMode="numeric"
-                          value={pin.qty}
-                          onChange={(e) => setQty(pin.id, e.target.value)}
-                          className="w-24 rounded-md border border-stone-300 px-3 py-2 text-right tabular-nums focus:border-lime-600 focus:outline-none focus:ring-2 focus:ring-lime-200"
-                        />
-                        <span className="w-10 text-[15px] text-stone-500">
-                          {cat.unit}
-                        </span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => removePin(pin.id)}
-                        aria-label={`Fjern nål ${i + 1}`}
-                        className="rounded p-2 text-stone-400 transition hover:bg-red-50 hover:text-red-600"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
+          {eduBoks}
+          <NaaleListe pins={pins} update={update} />
         </>
       )}
     </div>
   );
 }
+
 
 /* ==========================================================================
    TRIN 2 — Materialevalg og stil
@@ -1731,11 +1787,15 @@ function buildReport(state, estimate) {
   return {
     genereret: new Date().toISOString(),
     kunde: state.lead,
-    billede: state.imageName || "Ikke uploadet",
+    grundlag:
+      state.source === "skraafoto"
+        ? "Luftfoto fra Klimadatastyrelsen"
+        : state.imageName || "Ikke uploadet",
     markeringer: state.pins.map((p, i) => ({
       nr: i + 1,
       kategori: CATEGORIES[p.cat].label,
       maengde: `${p.qty} ${CATEGORIES[p.cat].unit}`,
+      opmaalt: Boolean(p.measured),
     })),
     materialer: state.materials.map((id) => {
       const m = MATERIALS.find((x) => x.id === id);
@@ -1828,7 +1888,11 @@ async function generatePdf(report) {
 
   line("Dine markeringer", 14, { bold: true, color: [90, 158, 36], gap: 20 });
   report.markeringer.forEach((m) =>
-    line(`${m.nr}.  ${m.kategori} — ${m.maengde}`, 11, { indent: 8 })
+    line(
+      `${m.nr}.  ${m.kategori} — ${m.maengde}${m.opmaalt ? "  (opmålt på luftfoto)" : ""}`,
+      11,
+      { indent: 8 }
+    )
   );
   y += 12;
 
@@ -2148,6 +2212,8 @@ function Step6Lead({ state, update, estimate, onLead }) {
    ========================================================================== */
 
 const INITIAL_STATE = {
+  // Er der et STAC-token, starter vi på luftfoto; ellers på upload.
+  source: hasSkraafotoAccess() ? "skraafoto" : "upload",
   image: null,
   imageName: "",
   pins: [],
@@ -2175,7 +2241,9 @@ export default function FaurlundHavePartner({ onLead, className }) {
   /* Hvornår må man gå videre? */
   const blocker = useMemo(() => {
     if (step === 0 && state.pins.length === 0)
-      return "Sæt mindst én nål på billedet for at komme videre.";
+      return state.source === "skraafoto"
+        ? "Find din adresse og sæt mindst én nål for at komme videre."
+        : "Sæt mindst én nål på billedet for at komme videre.";
     if (step === 1 && state.materials.length === 0)
       return "Vælg mindst ét materiale.";
     if (step === 2 && !state.workLevel)

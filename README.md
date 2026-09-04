@@ -90,3 +90,71 @@ at skifte ud med rigtige tal:
 - `JORD_TONS_PR_M2` — omregning fra udgravet areal til tons jord
 
 Alle beløb er inkl. moms.
+
+## Skråfoto: kundens egen have som udgangspunkt
+
+Modulet kan hente et luftfoto af kundens grund fra Klimadatastyrelsen i stedet
+for at bede om en billed-upload. Kunden søger sin adresse, ser sit eget hus fra
+luften, sætter nåle — og kan **måle rigtige arealer op** direkte på fotoet.
+
+Det er ikke et skøn. Et klik omregnes til et punkt på jordoverfladen ved at
+skære synslinjen fra kameraet mod højdemodellen, med kameraets indre og ydre
+orientering fra STAC-metadataene. Det fjerner den største usikkerhed i
+estimatet: kundens eget gæt på kvadratmeter.
+
+### Opsætning
+
+```bash
+cp .env.example .env    # udfyld VITE_STAC_TOKEN
+```
+
+| Funktion | Kræver |
+| --- | --- |
+| Adressesøgning og luftfoto | `VITE_STAC_TOKEN` fra dataforsyningen.dk |
+| Opmåling af arealer | Derudover DHM-adgang fra datafordeler.dk |
+| Billed-upload | Ingenting — virker altid |
+
+**Uden token virker modulet præcis som før** og starter på billed-upload. Der er
+ingen halv tilstand: mangler adgangen, er luftfoto-vejen der bare ikke.
+
+### Sikkerhed omkring tokens
+
+STAC-token'et er designet til at ligge i frontend-koden — Dataforsyningens egen
+eksempelkonfiguration siger det direkte. Det er altså i orden, at kundens browser
+kan se det, men det er knyttet til jeres konto og kan rate-limites.
+
+DHM-legitimationen er en anden sag. Det er en rigtig service-bruger med
+brugernavn og adgangskode, og den bør **ikke** ligge i en offentlig JS-fil. Sæt
+`VITE_DHM_PROXY_URL` til et endpoint på jeres egen server, der påhæfter
+legitimationen serverside.
+
+### Sådan er nåle gemt
+
+Nåle gemmes som punkter i verden (EPSG:25832), ikke som pixels på ét bestemt
+foto. Derfor bliver de liggende det rigtige sted, når kunden skifter mellem
+nord, syd, øst og vest.
+
+### Filer
+
+| Fil | Ansvar |
+| --- | --- |
+| `src/skraafoto/skraafotoConfig.js` | Tokens og endpoints — det eneste sted, der skal udfyldes |
+| `src/skraafoto/skraafotoClient.js` | API-kald, fotogrammetri og arealberegning. Ingen UI |
+| `src/components/SkraafotoHaveKort.jsx` | Kortet, nålene og opmålingen |
+
+Kortet lazy-loades, fordi OpenLayers og GeoTIFF-læsningen fylder ~770 kB. Hoved-
+bundlen er ~209 kB og påvirkes ikke af, at integrationen findes.
+
+### Status på afprøvning
+
+API-kontrakten er udledt af Klimadatastyrelsens egen MIT-licenserede viewer og
+af `@dataforsyningen/saul` — endpoints, CQL-filter, at token'et sendes som
+HTTP-header, og hvordan billedet hentes som COG.
+
+Arealberegningen er unit-testet. Modulet er kørt igennem i browser: både
+upload-vejen, adresse-UI'et, og at et fejlende API-kald giver kunden en pæn
+besked frem for et nedbrud.
+
+**Det, der udestår:** selve kaldet mod det levende API er aldrig afprøvet, fordi
+udviklingsmiljøet ikke har netværksadgang til `api.dataforsyningen.dk`. Første
+kørsel med et rigtigt token bør derfor ske med konsollen åben.
