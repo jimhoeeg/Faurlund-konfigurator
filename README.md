@@ -145,6 +145,21 @@ nord, syd, øst og vest.
 Kortet lazy-loades, fordi OpenLayers og GeoTIFF-læsningen fylder ~770 kB. Hoved-
 bundlen er ~209 kB og påvirkes ikke af, at integrationen findes.
 
+### Tjek adgangen, før I bruger tid på UI'et
+
+```bash
+npm run verify:skraafoto -- "Houlbjergvej 23, 8870 Langå"
+```
+
+Scriptet kører hele kæden igennem mod det levende API — adressesøgning, årgange,
+skråfoto-søgning, fotogrammetri-metadata og selve billedet — og siger præcis,
+hvad der virker. Det læser token'et fra `.env` eller fra `VITE_STAC_TOKEN`.
+
+Det skelner mellem en afvisning fra Dataforsyningen og en afvisning fra et
+netværksled undervejs, så en 403 fra en firmaproxy ikke bliver forvekslet med et
+ugyldigt token. Går noget galt i adressesøgningens svarformat, peger den direkte
+på `extractPoint()` i `skraafotoClient.js`.
+
 ### Status på afprøvning
 
 API-kontrakten er udledt af Klimadatastyrelsens egen MIT-licenserede viewer og

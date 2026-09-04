@@ -2,3 +2,9 @@ node_modules
 dist
 .DS_Store
 *.local
+
+# Tokens og legitimation må aldrig i git
+.env
+.env.*
+!.env.example
+public/config.js
