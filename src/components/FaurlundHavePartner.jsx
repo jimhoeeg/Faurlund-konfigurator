@@ -42,6 +42,7 @@ import {
   Phone,
   Ruler,
   Shield,
+  Shovel,
   Sparkles,
   Trash2,
   User,
@@ -49,6 +50,7 @@ import {
 } from "lucide-react";
 
 import { hasSkraafotoAccess } from "../skraafoto/skraafotoConfig.js";
+import MaterialeTekstur from "./MaterialeTekstur.jsx";
 
 /* Kortet trækker OpenLayers og GeoTIFF-læsning med sig — tilsammen langt det
    tungeste i modulet. Det hentes derfor først, når kunden rent faktisk vælger
@@ -242,7 +244,8 @@ const MATERIALS = [
     label: "Herregårdssten",
     tag: "Klassisk",
     factor: 1.0,
-    swatch: "#9a9186",
+    tex: "brick",
+    pal: { a: "#8f887c", b: "#7d7669", c: "#a39a8d", j: "#6a655b" },
     blurb:
       "Herregårdssten er en betonsten med fasede kanter og et roligt, tidløst udtryk. Den tåler biltrafik, kan lægges i mange forbandter og er let at optage igen, hvis der senere skal graves ned til rør.",
   },
@@ -252,17 +255,19 @@ const MATERIALS = [
     label: "Granit chaussésten",
     tag: "Eksklusiv",
     factor: 1.45,
-    swatch: "#6f7276",
+    tex: "cobble",
+    pal: { a: "#5f6367", b: "#565a5e", c: "#787d81", j: "#43474a" },
     blurb:
       "Granit er stort set uopslideligt og bliver kønnere med årene. Det er dyrere i både materiale og arbejdsløn, fordi hver sten sættes og bankes i hånden — til gengæld holder belægningen i generationer.",
   },
   {
     id: "betonfliser",
     cat: "belaegning",
-    label: "Betonfliser, store formater",
+    label: "Store betonfliser",
     tag: "Moderne",
     factor: 1.15,
-    swatch: "#b9b4ab",
+    tex: "slab",
+    pal: { a: "#a49d92", b: "#8b8479", c: "#c4beb4", j: "#77716a" },
     blurb:
       "Store fliser giver få fuger og et roligt, moderne gulv. De kræver til gengæld et ekstra præcist afretterlag — en flise på 80x80 cm afslører enhver ujævnhed i underlaget.",
   },
@@ -272,7 +277,8 @@ const MATERIALS = [
     label: "Keramiske klinker",
     tag: "Vedligeholdelsesfri",
     factor: 1.55,
-    swatch: "#8d7f74",
+    tex: "tile",
+    pal: { a: "#7d7168", b: "#6b6058", c: "#8e8178", j: "#5c524b" },
     blurb:
       "Keramik optager stort set intet vand. Det betyder minimal alge- og mosvækst og en flade, der kan spules ren — men fliserne er skøre under lægning og kræver et helt stabilt bærelag.",
   },
@@ -283,7 +289,8 @@ const MATERIALS = [
     label: "Cumaru hårdttræ",
     tag: "Livstidsvalg",
     factor: 1.35,
-    swatch: "#8a5a2b",
+    tex: "plank",
+    pal: { a: "#8a5a2b", b: "#6d4520", c: "#9e6b38", j: "#4e3117" },
     blurb:
       "Cumaru er ekstremt hårdt træ med 30+ års levetid. Kan stå ubehandlet og patinere smukt sølvgråt.",
   },
@@ -293,7 +300,8 @@ const MATERIALS = [
     label: "Sibirisk lærk",
     tag: "God balance",
     factor: 1.0,
-    swatch: "#c08a4e",
+    tex: "plank",
+    pal: { a: "#c08a4e", b: "#a3703c", c: "#d19b5f", j: "#7d5429" },
     blurb:
       "Lærk er et nordisk nåletræ med naturligt høj kernevedsandel. Det holder typisk 15-20 år ubehandlet og koster omkring det halve af hårdttræ — et fornuftigt valg, hvis terrassen ikke skal holde en menneskealder.",
   },
@@ -303,7 +311,8 @@ const MATERIALS = [
     label: "Komposit",
     tag: "Nem pleje",
     factor: 1.2,
-    swatch: "#6b6b63",
+    tex: "plank",
+    pal: { a: "#6b6b63", b: "#585851", c: "#7d7d74", j: "#46463f" },
     blurb:
       "Komposit splintrer ikke og skal aldrig olieres. Til gengæld bliver den varm i solen og kan ikke slibes op — bliver den ridset, bliver den ved med at være ridset.",
   },
@@ -314,7 +323,8 @@ const MATERIALS = [
     label: "Rullegræs",
     tag: "Færdig samme dag",
     factor: 1.3,
-    swatch: "#4e8f27",
+    tex: "grass",
+    pal: { a: "#3f7a22", b: "#356618", c: "#5ea336", j: "#2b5212" },
     blurb:
       "Rullegræs giver en færdig plæne på én dag og kan betrædes efter få uger. Prisen ligger i selve græstæppet — men du slipper for et halvt års ukrudt i en spirende såning.",
   },
@@ -324,7 +334,8 @@ const MATERIALS = [
     label: "Sået græs",
     tag: "Økonomisk",
     factor: 1.0,
-    swatch: "#7bb043",
+    tex: "grass",
+    pal: { a: "#5c8f34", b: "#4a7828", c: "#7ab04a", j: "#3d6420" },
     blurb:
       "Såning er markant billigere og giver et stærkere rodnet på sigt, fordi græsset gror op i sin egen jord. Kræver til gengæld tålmodighed og daglig vanding de første 4-6 uger.",
   },
@@ -335,7 +346,8 @@ const MATERIALS = [
     label: "Staudebed med sæsonflor",
     tag: "Frodigt",
     factor: 1.15,
-    swatch: "#a05a9c",
+    tex: "bed",
+    pal: { a: "#54703a", b: "#9a4f96", c: "#8fbf4d", j: "#3d5229" },
     blurb:
       "Stauder kommer igen hvert år og bliver større. Vi sammensætter bedet, så noget blomstrer fra maj til oktober — det kræver flere plantesorter, men giver en have, der aldrig står tom.",
   },
@@ -345,7 +357,8 @@ const MATERIALS = [
     label: "Prydgræsser & solitærer",
     tag: "Arkitektonisk",
     factor: 1.25,
-    swatch: "#b39b6a",
+    tex: "bed",
+    pal: { a: "#7d8a52", b: "#b39b6a", c: "#cbb87f", j: "#5e6a3c" },
     blurb:
       "Græsser og enkeltstående solitærplanter giver struktur hele vinteren og bevæger sig i vinden. Færre planter pr. m² betyder mindre pasning — men de får først deres fulde udtryk efter 2-3 sæsoner.",
   },
@@ -355,7 +368,8 @@ const MATERIALS = [
     label: "Bunddække & barkflis",
     tag: "Lav pasning",
     factor: 0.85,
-    swatch: "#6d7f52",
+    tex: "bed",
+    pal: { a: "#5a6b3f", b: "#6d5535", c: "#7e9450", j: "#463f28" },
     blurb:
       "Et tæt bunddække udkonkurrerer ukrudtet, når det først er etableret. Vi lægger 7-10 cm flis ovenpå, så jorden holder på fugten og du slipper for at luge hver anden weekend.",
   },
@@ -366,7 +380,8 @@ const MATERIALS = [
     label: "Bøgehæk",
     tag: "Dansk klassiker",
     factor: 1.0,
-    swatch: "#8a6b3d",
+    tex: "hedge",
+    pal: { a: "#4f6b2a", b: "#8a6337", c: "#79a03c", j: "#3a4a1e" },
     blurb:
       "Bøg beholder sine visne, kobberbrune blade hele vinteren og giver derfor læ og afskærmning året rundt. Den skal klippes én gang om året — helst i juni, når fuglene er fløjet fra reden.",
   },
@@ -376,7 +391,8 @@ const MATERIALS = [
     label: "Ligusterhæk",
     tag: "Hurtig",
     factor: 0.85,
-    swatch: "#4f7a3a",
+    tex: "hedge",
+    pal: { a: "#3f7a30", b: "#356825", c: "#5b9c44", j: "#2c5a20" },
     blurb:
       "Liguster vokser hurtigt og er billig i indkøb — du har en tæt hæk på ganske få år. Prisen er, at den kræver klipning to gange årligt for ikke at blive gistrig forneden.",
   },
@@ -386,7 +402,8 @@ const MATERIALS = [
     label: "Thuja / stedsegrøn",
     tag: "Tæt hele året",
     factor: 1.3,
-    swatch: "#2f6b4a",
+    tex: "hedge",
+    pal: { a: "#2c5a40", b: "#234833", c: "#3d7452", j: "#1c3a29" },
     blurb:
       "En stedsegrøn hæk er 100% tæt året rundt og fungerer som støjdæmpning. Husk at den ikke skyder igen fra det gamle ved — klipper man ind i det brune, bliver det brunt.",
   },
@@ -397,7 +414,8 @@ const MATERIALS = [
     label: "Betonstøttemur",
     tag: "Robust",
     factor: 1.0,
-    swatch: "#9c9c96",
+    tex: "block",
+    pal: { a: "#9c9c96", b: "#88887f", c: "#adada6", j: "#74746d" },
     blurb:
       "Systemblokke i beton er hurtige at rejse og meget stærke. De kan efterbeklædes senere, hvis udtrykket skal blødes op — konstruktionen er den samme.",
   },
@@ -407,7 +425,8 @@ const MATERIALS = [
     label: "Granit / natursten",
     tag: "Eksklusiv",
     factor: 1.6,
-    swatch: "#6a6d70",
+    tex: "rubble",
+    pal: { a: "#6a6d70", b: "#5a5d60", c: "#7e8286", j: "#494c4f" },
     blurb:
       "Natursten sættes i hånden, sten for sten, og bliver aldrig to ens mure. Det er den dyreste løsning i arbejdstid — og den eneste, der stadig ser rigtig ud om 50 år.",
   },
@@ -417,7 +436,8 @@ const MATERIALS = [
     label: "Cortenstål",
     tag: "Skarpt design",
     factor: 1.35,
-    swatch: "#8c4a2f",
+    tex: "steel",
+    pal: { a: "#8c4a2f", b: "#6f3823", c: "#a75e3c", j: "#5a2c1a" },
     blurb:
       "Cortenstål ruster kontrolleret og danner sit eget beskyttende lag. Det giver knivskarpe kanter og smalle bede — men vær opmærksom på, at rusten kan farve lyse fliser de første sæsoner.",
   },
@@ -428,7 +448,8 @@ const MATERIALS = [
     label: "12V LED-spots",
     tag: "Stemning",
     factor: 1.0,
-    swatch: "#d9b64a",
+    tex: "glow",
+    pal: { a: "#2b2a26", b: "#3a382f", c: "#e8c469", j: "#1d1c19" },
     blurb:
       "Lavvolt-anlæg er ufarligt at arbejde med og må lægges uden autoriseret elinstallatør. Perfekt til at lyse træer, trapper og bede op — og let at udvide senere.",
   },
@@ -438,7 +459,8 @@ const MATERIALS = [
     label: "230V pullertlamper",
     tag: "Funktion",
     factor: 1.4,
-    swatch: "#b8b2a4",
+    tex: "glow",
+    pal: { a: "#2e2f2c", b: "#3d3e39", c: "#e9e6d4", j: "#1f201d" },
     blurb:
       "Pullerter giver et bredt, blændfrit lys langs stier og indkørsler. Kræver autoriseret elarbejde og nedgravet kabel i den rigtige dybde — det tager vi os af sammen med vores elektriker.",
   },
@@ -1287,12 +1309,14 @@ function MaterialCard({ material, selected, onSelect, openInfo, onToggleInfo }) 
         type="button"
         onClick={onSelect}
         aria-pressed={selected}
-        className="relative block h-24 w-full focus:outline-none focus-visible:ring-4 focus-visible:ring-lime-300"
-        style={{
-          background: `linear-gradient(135deg, ${material.swatch} 0%, ${material.swatch}cc 55%, ${material.swatch}88 100%)`,
-        }}
+        className="group relative block h-28 w-full overflow-hidden focus:outline-none focus-visible:ring-4 focus-visible:ring-lime-300"
       >
-        <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-0.5 text-[13px] font-semibold uppercase tracking-wider text-stone-700">
+        <MaterialeTekstur
+          tex={material.tex}
+          palette={material.pal}
+          className="h-full w-full transition-transform duration-500 group-hover:scale-105"
+        />
+        <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-0.5 text-[13px] font-semibold uppercase tracking-wider text-stone-700 shadow-sm">
           {material.tag}
         </span>
         {selected && (
@@ -2274,40 +2298,69 @@ export default function FaurlundHavePartner({ onLead, className }) {
 
       {/* --- Header --------------------------------------------------- */}
       <header
-        className="px-4 py-6 sm:px-8 sm:py-8"
+        className="relative overflow-hidden px-4 pb-9 pt-7 sm:px-8 sm:pb-12 sm:pt-10"
         style={{ background: BRAND.sage }}
       >
-        <div className="mx-auto flex max-w-4xl flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <Leaf className="h-5 w-5" style={{ color: BRAND.green }} />
+        {/* En hæk langs bunden i stedet for en almindelig streg. Et lille
+            signaturtræk, der siger anlægsgartner uden at fylde noget. */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-3.5">
+          <MaterialeTekstur
+            tex="hedge"
+            palette={{ a: "#4f6b2a", b: "#3f5720", c: "#79a03c", j: "#3a4a1e" }}
+            className="h-full w-full"
+          />
+        </div>
+
+        <div className="relative mx-auto flex max-w-4xl flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2.5">
+              <span
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+                style={{ background: BRAND.green }}
+              >
+                <Shovel className="h-4 w-4 text-white" aria-hidden="true" />
+              </span>
               <span
                 className="text-[15px] font-bold uppercase tracking-[0.24em]"
-                style={{ color: BRAND.green }}
+                style={{ color: BRAND.greenDark }}
               >
                 {VIRKSOMHED.navn}
               </span>
             </div>
+
             <h1
-              className="fhp-display mt-1 text-3xl font-bold leading-tight sm:text-4xl"
+              className="fhp-display mt-3 text-[32px] font-bold leading-[1.08] sm:text-[44px]"
               style={{ color: BRAND.greenBright }}
             >
-              Faurlunds Have-Partner
+              Faurlunds
+              <br />
+              <span style={{ color: BRAND.greenDark }}>Have-Partner</span>
             </h1>
-            <p className="mt-2 max-w-xl text-[17px] leading-relaxed text-stone-600">
-              Seks trin til overblik over dit haveprojekt — materialer, arbejde
-              og pris. Du får estimatet at se, før vi beder om dine oplysninger.
-            </p>
+
+            <div className="mt-4 flex items-start gap-3">
+              <span
+                className="mt-3 hidden h-px w-10 shrink-0 sm:block"
+                style={{ background: BRAND.green }}
+              />
+              <p className="max-w-md text-[17px] leading-relaxed text-stone-700">
+                Seks trin til overblik over dit haveprojekt — materialer,
+                arbejde og pris. Du får estimatet at se, før vi beder om dine
+                oplysninger.
+              </p>
+            </div>
           </div>
 
-          <div className="shrink-0 text-[16px] uppercase tracking-wider text-stone-600 sm:text-right">
-            <p className="flex items-center gap-2 sm:justify-end">
+          <div className="shrink-0 sm:text-right">
+            <p className="flex items-center gap-2 text-[17px] font-semibold tracking-wide text-stone-700 sm:justify-end">
               <Phone className="h-4 w-4" style={{ color: BRAND.green }} />
               {VIRKSOMHED.telefon}
             </p>
-            <p className="mt-1 flex items-center gap-2 sm:justify-end">
+            <p className="mt-1.5 flex items-center gap-2 text-[16px] uppercase tracking-wider text-stone-600 sm:justify-end">
               <MapPin className="h-4 w-4" style={{ color: BRAND.green }} />
               Langå · Aarhus V
+            </p>
+            <p className="mt-3 text-[15px] italic leading-snug text-stone-600 sm:max-w-[15rem]">
+              {VIRKSOMHED.citat}
             </p>
           </div>
         </div>
