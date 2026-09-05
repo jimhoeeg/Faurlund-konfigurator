@@ -1,0 +1,65 @@
+# Udgiver prototypen til GitHub Pages, så den kan deles med Faurlund.
+#
+# ENGANGSOPSÆTNING: gå til Settings -> Pages og vælg Source: "GitHub Actions".
+# Uden det fejler deploy-trinnet.
+#
+# Luftfoto er slået fra, medmindre der findes et repository secret ved navn
+# VITE_STAC_TOKEN (Settings -> Secrets and variables -> Actions). Uden det
+# starter modulet på billed-upload, og alt andet virker som normalt.
+# Bemærk: repoet er offentligt, så et token lagt her bliver offentligt
+# tilgængeligt i den byggede side. Dataforsyningen designer deres token til
+# netop det, men det er stadig en beslutning, I skal tage bevidst.
+
+name: Udgiv prototype
+
+on:
+  push:
+    branches: ["claude/faurlund-have-partner-module-5fgp76"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Én udgivelse ad gangen. Nye pushes afløser den, der er i gang.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  byg:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Installér
+        run: npm ci
+
+      - name: Kør tests
+        run: npm test
+
+      - name: Byg
+        run: npm run build
+        env:
+          VITE_BASE: /Faurlund-konfigurator/
+          VITE_STAC_TOKEN: ${{ secrets.VITE_STAC_TOKEN }}
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  udgiv:
+    needs: byg
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
