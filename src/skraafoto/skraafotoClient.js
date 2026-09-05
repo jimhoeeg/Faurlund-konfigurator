@@ -171,9 +171,20 @@ export function photoYear(item) {
   return match ? match[1] : "";
 }
 
-/** URL til selve billedet (Cloud Optimized GeoTIFF). */
-export function photoHref(item) {
-  return item?.assets?.data?.href || null;
+/**
+ * URL til selve billedet (Cloud Optimized GeoTIFF).
+ *
+ * Billedet hentes af kortbiblioteket med almindelige range-forespørgsler, og
+ * dér kan vi ikke sætte vores `token`-header på. Derfor lægges token'et på som
+ * query-parameter, som Dataforsyningens dokumentation også tillader — men kun
+ * hvis API'et ikke allerede selv har lagt det i linket.
+ */
+export function photoHref(item, opts = {}) {
+  const cfg = opts.config || skraafotoConfig;
+  const href = item?.assets?.data?.href;
+  if (!href) return null;
+  if (!cfg.API_STAC_TOKEN || /[?&]token=/.test(href)) return href;
+  return `${href}${href.includes("?") ? "&" : "?"}token=${encodeURIComponent(cfg.API_STAC_TOKEN)}`;
 }
 
 /* ==========================================================================

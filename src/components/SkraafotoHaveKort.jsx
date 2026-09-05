@@ -174,10 +174,21 @@ export default function SkraafotoHaveKort({
 
   /* ------------------------------------------------------ OpenLayers-kortet */
 
+  // Kort-elementet findes først, når en adresse er valgt — indtil da viser vi
+  // adressesøgningen. Effekten skal derfor køre igen, når det sker, ellers
+  // bliver kortet aldrig oprettet. Vi hænger på en boolean og ikke på `place`
+  // selv, så et skift til en anden adresse ikke river kortet ned og bygger det
+  // op igen unødigt.
+  const harKort = Boolean(place);
+
   useEffect(() => {
     if (!mapEl.current || mapRef.current) return;
     const map = new Map({ target: mapEl.current, layers: [], controls: [] });
     mapRef.current = map;
+
+    // Kortet måler sit element ved oprettelsen. Er layoutet ikke faldet helt
+    // på plads endnu, tegner det ingenting — så vi beder det måle om.
+    requestAnimationFrame(() => map.updateSize());
 
     let frame = null;
     const onRender = () => {
@@ -195,11 +206,11 @@ export default function SkraafotoHaveKort({
       map.setTarget(undefined);
       mapRef.current = null;
     };
-  }, []);
+  }, [harKort]);
 
   useEffect(() => {
     const map = mapRef.current;
-    const href = photoHref(item);
+    const href = photoHref(item, { config });
     if (!map || !href) return;
 
     let cancelled = false;
@@ -243,7 +254,7 @@ export default function SkraafotoHaveKort({
     return () => {
       cancelled = true;
     };
-  }, [item, place]);
+  }, [item, place, harKort, config]);
 
   /* ------------------------------------------------------------ Klik i kort */
 
