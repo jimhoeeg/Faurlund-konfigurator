@@ -9,6 +9,7 @@
  * @dataforsyningen/saul. Konkret:
  *
  *   - Token sendes som HTTP-headeren `token` — ikke som query-parameter.
+ *   - Adresser slås op i DAWA, der som den eneste tjeneste er helt uden token.
  *   - Skråfoto søges via STAC med et CQL-JSON-filter på punkt + retning.
  *   - Selve billedet ligger i `item.assets.data.href` som en COG (GeoTIFF).
  *   - Fotogrammetrien (billedpixel <-> verdenskoordinat) klares af saul, der
@@ -38,12 +39,20 @@ class SkraafotoError extends Error {
 }
 
 /* ==========================================================================
-   Adressesøgning (gsearch)
+   Adressesøgning (DAWA)
    ========================================================================== */
 
 /**
- * Søger adresser via gsearch.
- * Ressourcen `husnummer` giver adresser; `stednavn` giver stednavne.
+ * Søger danske adresser i DAWA (Danmarks Adressers Web API).
+ *
+ * DAWA er bevidst valgt frem for gsearch: Dataforsyningens dokumentation
+ * undtager udtrykkeligt DAWA fra token-kravet, så adressesøgningen virker,
+ * uanset hvilke tjenester der er åbnet på kontoen. Det er én afhængighed og
+ * én fejlkilde mindre — og det var netop gsearch, der afviste vores token
+ * med 401, mens skråfoto-tjenesten svarede fint.
+ *
+ * Svaret er en liste af `{ tekst, adresse: { id, x, y, ... } }`, hvor x/y er
+ * i den srid, man beder om — altså EPSG:25832 her.
  *
  * @param {string} query - Fritekst, fx "Houlbjergvej 23"
  * @param {object} [opts]
@@ -52,73 +61,44 @@ class SkraafotoError extends Error {
 export async function searchAddress(query, opts = {}) {
   const cfg = opts.config || skraafotoConfig;
   const limit = opts.limit || 8;
-  const resource = opts.resource || "husnummer";
 
   const trimmed = (query || "").trim();
   if (trimmed.length < 2) return [];
 
+  // Bevidst ingen limit-parameter: DAWA afviser ukendte parametre med 400,
+  // og vi er ikke sikre på navnet. Vi skærer i stedet listen til her.
   const url =
-    `${cfg.API_GSEARCH_BASEURL}/${resource}` +
-    `?q=${encodeURIComponent(trimmed)}&limit=${limit}&srid=${cfg.SRID}`;
+    `${cfg.API_DAWA_BASEURL}/adresser/autocomplete` +
+    `?q=${encodeURIComponent(trimmed)}&srid=${cfg.SRID}`;
 
   let response;
   try {
-    response = await fetch(url, {
-      method: "GET",
-      headers: { token: cfg.API_STAC_TOKEN },
-      signal: opts.signal,
-    });
+    // Ingen token — DAWA er åben.
+    response = await fetch(url, { method: "GET", signal: opts.signal });
   } catch (err) {
     if (err?.name === "AbortError") throw err;
     throw new SkraafotoError("Kunne ikke nå adressetjenesten.", err);
   }
 
   if (!response.ok) {
-    throw new SkraafotoError(
-      response.status === 401 || response.status === 403
-        ? "Adressesøgningen afviste vores token."
-        : `Adressesøgningen svarede ${response.status}.`
-    );
+    throw new SkraafotoError(`Adressesøgningen svarede ${response.status}.`);
   }
 
-  const data = await response.json();
-  const rows = Array.isArray(data) ? data : data?.features || [];
+  const rows = await response.json();
+  if (!Array.isArray(rows)) return [];
 
   return rows
-    .map((row, i) => {
-      const coord = extractPoint(row.geometry);
-      if (!coord) return null;
+    .map((row) => {
+      const a = row.adresse;
+      if (!a || !Number.isFinite(a.x) || !Number.isFinite(a.y)) return null;
       return {
-        id: row.id || `${resource}-${i}`,
-        label: row.visningstekst || row.betegnelse || row.navn || trimmed,
-        coord,
+        id: a.id || `${a.vejkode}-${a.husnr}`,
+        label: row.tekst || `${a.vejnavn} ${a.husnr}, ${a.postnr} ${a.postnrnavn}`,
+        coord: [a.x, a.y],
       };
     })
-    .filter(Boolean);
-}
-
-/**
- * Trækker ét repræsentativt punkt ud af en GeoJSON-geometri.
- * Følger samme fremgangsmåde som viewerens `getGSearchCenterPoint`.
- */
-function extractPoint(geometry) {
-  if (!geometry?.coordinates) return null;
-  const { type, coordinates } = geometry;
-
-  if (type === "Point") return [coordinates[0], coordinates[1]];
-  if (type === "MultiPoint") return [coordinates[0][0], coordinates[0][1]];
-  if (type === "MultiLineString") {
-    const line = coordinates[0];
-    const mid = line[Math.floor(line.length / 2)];
-    return [mid[0], mid[1]];
-  }
-  if (type === "Polygon" || type === "MultiPolygon") {
-    // Gennemsnittet af yderringen rammer godt nok til at centrere et foto.
-    const ring = type === "Polygon" ? coordinates[0] : coordinates[0][0];
-    const sum = ring.reduce((a, p) => [a[0] + p[0], a[1] + p[1]], [0, 0]);
-    return [sum[0] / ring.length, sum[1] / ring.length];
-  }
-  return null;
+    .filter(Boolean)
+    .slice(0, limit);
 }
 
 /* ==========================================================================

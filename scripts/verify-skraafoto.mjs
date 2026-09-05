@@ -5,7 +5,7 @@
  * Kører hele kæden igennem mod det levende API og siger præcis, hvad der
  * virker, og hvad der ikke gør:
  *
- *   1. Adressesøgning (gsearch)      -> koordinat i EPSG:25832
+ *   1. Adressesøgning (DAWA, uden token) -> koordinat i EPSG:25832
  *   2. Årgange (STAC collections)    -> hvilke år findes der fotos fra
  *   3. Skråfoto-søgning (STAC)       -> et item, der dækker adressen
  *   4. Metadata til fotogrammetri    -> kan vi overhovedet måle op
@@ -20,7 +20,7 @@
 
 import { readFileSync } from "node:fs";
 
-const GSEARCH = "https://api.dataforsyningen.dk/rest/gsearch/v2.0";
+const DAWA = "https://api.dataforsyningen.dk";
 const STAC = "https://api.dataforsyningen.dk/rest/skraafoto_api/v2";
 const CRS = "http://www.opengis.net/def/crs/EPSG/0/25832";
 
@@ -80,66 +80,32 @@ async function main() {
   }
   ok("Token fundet", `${token.slice(0, 4)}… (${token.length} tegn)`);
 
-  /* --- 1. Adressesøgning ------------------------------------------------ */
+  /* --- 1. Adressesøgning (DAWA — kræver ikke token) --------------------- */
   let coord = null;
   try {
-    const url = `${GSEARCH}/husnummer?q=${encodeURIComponent(adresse)}&limit=3&srid=25832`;
-    const r = await hent(url, token);
+    const url = `${DAWA}/adresser/autocomplete?q=${encodeURIComponent(adresse)}&srid=25832`;
+    const svar = await fetch(url); // bevidst uden token
+    const raekker = svar.ok ? await svar.json() : null;
 
-    if (r.status === 401 || r.status === 403) {
-      // 403 kommer ikke nødvendigvis fra Dataforsyningen. Sidder man bag en
-      // proxy eller et firmanetværk, er det ofte den, der afviser — og så er
-      // token'et helt uskyldigt. Derfor vises svaret altid.
-      const svar = r.tekst.trim().slice(0, 300);
-      const proxy = /allowlist|egress|proxy|blocked|forbidden by/i.test(svar);
+    if (!svar.ok) {
       fejl(
-        `Adressesøgning afvist (${r.status})`,
-        proxy
-          ? `Afvist af et netværksled, ikke af Dataforsyningen:\n      ${svar}`
-          : `Svar: ${svar || "(tomt)"}\n      ` +
-            "Er det Dataforsyningen, der afviser, så tjek at token'et er kopieret helt,\n      " +
-            "og at tjenesten er slået til på kontoen hos dataforsyningen.dk."
+        `Adressesøgning svarede ${svar.status}`,
+        "DAWA er en åben tjeneste, så et token er ikke problemet her.\n      " +
+          "Tjek nettet, eller om api.dataforsyningen.dk kan nås."
       );
-    } else if (!r.ok) {
-      fejl(`Adressesøgning svarede ${r.status}`, r.tekst.slice(0, 200));
+    } else if (!Array.isArray(raekker) || !raekker.length) {
+      fejl("Adressesøgning gav nul resultater", `Prøv en anden adresse end "${adresse}".`);
     } else {
-      const raekker = Array.isArray(r.data) ? r.data : r.data?.features || [];
-      if (!raekker.length) {
-        fejl("Adressesøgning gav nul resultater", `Prøv en anden adresse end "${adresse}".`);
+      const a = raekker[0].adresse;
+      if (!a || !Number.isFinite(a.x) || !Number.isFinite(a.y)) {
+        fejl(
+          "Adressesøgning: uventet svarform",
+          `Manglede adresse.x / adresse.y. Fik: ${Object.keys(raekker[0]).join(", ")}\n      ` +
+            "Justér searchAddress() i src/skraafoto/skraafotoClient.js."
+        );
       } else {
-        const f = raekker[0];
-        const g = f.geometry;
-        const label = f.visningstekst || f.betegnelse || f.navn;
-
-        // Her ligger den eneste reelle usikkerhed i integrationen:
-        // svarets form. Vi rapporterer den eksplicit.
-        if (!g?.coordinates) {
-          fejl(
-            "Adressesøgning: uventet svarform",
-            `Manglede geometry.coordinates. Fik nøglerne: ${Object.keys(f).join(", ")}\n      ` +
-              `Justér extractPoint() i src/skraafoto/skraafotoClient.js.`
-          );
-        } else {
-          const c =
-            g.type === "Point"
-              ? g.coordinates
-              : g.type === "MultiPoint"
-                ? g.coordinates[0]
-                : null;
-          if (c) {
-            coord = [c[0], c[1]];
-            ok("Adressesøgning", `${label} -> ${coord[0].toFixed(0)}, ${coord[1].toFixed(0)}`);
-            ok("Svarform som forventet", `geometry.type = ${g.type}`);
-          } else {
-            ok("Adressesøgning", `${label} (geometry.type = ${g.type})`);
-            console.log(
-              farve.svag(
-                `      Bemærk: ${g.type} håndteres af extractPoint(), men er ikke testet her.`
-              )
-            );
-            coord = null;
-          }
-        }
+        coord = [a.x, a.y];
+        ok("Adressesøgning (DAWA)", `${raekker[0].tekst} -> ${a.x}, ${a.y}`);
       }
     }
   } catch (e) {

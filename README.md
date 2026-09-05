@@ -110,9 +110,15 @@ cp .env.example .env    # udfyld VITE_STAC_TOKEN
 
 | Funktion | Kræver |
 | --- | --- |
-| Adressesøgning og luftfoto | `VITE_STAC_TOKEN` fra dataforsyningen.dk |
+| Adressesøgning | Ingenting — DAWA er en åben tjeneste uden token |
+| Luftfoto | `VITE_STAC_TOKEN` fra dataforsyningen.dk |
 | Opmåling af arealer | Derudover DHM-adgang fra datafordeler.dk |
 | Billed-upload | Ingenting — virker altid |
+
+Adresser slås op i **DAWA** frem for gsearch. Dataforsyningens dokumentation
+undtager udtrykkeligt DAWA fra token-kravet, og i praksis afviste gsearch vores
+token med 401, mens skråfoto-tjenesten svarede fint på det samme token. DAWA
+fjerner både den afhængighed og den fejlkilde.
 
 **Uden token virker modulet præcis som før** og starter på billed-upload. Der er
 ingen halv tilstand: mangler adgangen, er luftfoto-vejen der bare ikke.
@@ -159,6 +165,20 @@ Det skelner mellem en afvisning fra Dataforsyningen og en afvisning fra et
 netværksled undervejs, så en 403 fra en firmaproxy ikke bliver forvekslet med et
 ugyldigt token. Går noget galt i adressesøgningens svarformat, peger den direkte
 på `extractPoint()` i `skraafotoClient.js`.
+
+### Hvad der er bekræftet mod det levende API
+
+| Del | Status |
+| --- | --- |
+| Skråfoto-token | Virker. Årgange 2017, 2019, 2021, 2023 og 2025 er tilgængelige |
+| Adressesøgning (DAWA) | Virker uden token. Svarformat verificeret og enhedstestet |
+| Koordinatsystem | EPSG:25832 bekræftet i både DAWA- og STAC-svar |
+| gsearch | Afviser vores token med 401 — derfor ikke brugt |
+| Opmåling (DHM) | Ikke afprøvet. Kræver separat konto på datafordeler.dk |
+
+**Licens og priser:** STAC-svaret henviser til
+`klimadatastyrelsen.dk/om-klimadatastyrelsen/vilkaar-og-priser`. Kommerciel brug
+i et salgsværktøj bør afklares mod de vilkår, før modulet går i luften.
 
 ### Status på afprøvning
 

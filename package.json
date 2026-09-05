@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "verify:skraafoto": "node scripts/verify-skraafoto.mjs"
+    "verify:skraafoto": "node scripts/verify-skraafoto.mjs",
+    "test": "node test/koer-alle.mjs"
   },
   "dependencies": {
     "@dataforsyningen/saul": "^4.2.0",

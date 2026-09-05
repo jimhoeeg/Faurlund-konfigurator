@@ -18,12 +18,17 @@
  */
 
 export const skraafotoConfig = {
-  /** Token fra https://dataforsyningen.dk/ — dækker både skråfoto og adressesøgning. */
+  /** Token fra https://dataforsyningen.dk/. Bruges kun til skråfotos — adresser er åbne. */
   API_STAC_TOKEN: import.meta.env?.VITE_STAC_TOKEN || "",
 
   /** Verificeret mod Klimadatastyrelsens egen viewer (skraafoto_frontend, MIT). */
   API_STAC_BASEURL: "https://api.dataforsyningen.dk/rest/skraafoto_api/v2",
-  API_GSEARCH_BASEURL: "https://api.dataforsyningen.dk/rest/gsearch/v2.0",
+
+  /**
+   * Adresser slås op i DAWA, som er undtaget token-kravet. Derfor virker
+   * adressesøgningen, uanset hvilke tjenester der er åbnet på kontoen.
+   */
+  API_DAWA_BASEURL: "https://api.dataforsyningen.dk",
 
   /**
    * Højdemodellen (DHM). Kræves KUN til opmåling — nåle virker uden.
