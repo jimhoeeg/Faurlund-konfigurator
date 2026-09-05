@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "verify:skraafoto": "node scripts/verify-skraafoto.mjs",
-    "test": "node test/koer-alle.mjs"
+    "test": "node test/koer-alle.mjs",
+    "build:demo": "vite build --config vite.demo.config.js"
   },
   "dependencies": {
     "@dataforsyningen/saul": "^4.2.0",
