@@ -84,7 +84,7 @@ export default function SkraafotoHaveKort({
   const [searching, setSearching] = useState(false);
   const [place, setPlace] = useState(null); // { label, coord }
 
-  const [direction, setDirection] = useState("north");
+  const [direction, setDirection] = useState("nadir");
   const [item, setItem] = useState(null);
   const [terrain, setTerrain] = useState(null);
 
@@ -252,33 +252,38 @@ export default function SkraafotoHaveKort({
       if (!item) return;
       const imageXY = evt.coordinate;
 
-      // Uden terrændata kan vi ikke omregne præcist. Nåle placeres da på
-      // terrænkote 0 — godt nok til en markering, ikke til opmåling.
-      let world;
-      try {
-        world = terrain
-          ? await imageToWorld(item, terrain, imageXY, { config })
-          : null;
-      } catch {
-        world = null;
-      }
-      if (!world) {
-        setError(
-          "Kunne ikke omregne punktet til en placering i haven. Prøv igen, eller upload et billede i stedet."
-        );
-        return;
+      // Med højdemodel omregnes klikket til et punkt i verden, så nålen
+      // overlever et skift af retning. Uden højdemodel gemmer vi i stedet
+      // billedets egen pixelkoordinat: den er stabil under zoom og panorering,
+      // men hører kun til dette ene foto — derfor låses retningen i det
+      // tilfælde, se `canMeasure` nedenfor.
+      let world = null;
+      if (terrain) {
+        try {
+          world = await imageToWorld(item, terrain, imageXY, { config });
+        } catch {
+          world = null;
+        }
       }
 
       if (mode === "measure") {
+        if (!world) return; // opmåling kræver højdemodellen
         setDraft((d) => [...d, world]);
-      } else {
-        const cat = categories[activeCat];
-        if (!cat) return;
-        onPinsChange([
-          ...pins,
-          { id: uid(), cat: activeCat, world, qty: cat.defaultQty, measured: false },
-        ]);
+        return;
       }
+
+      const cat = categories[activeCat];
+      if (!cat) return;
+      onPinsChange([
+        ...pins,
+        {
+          id: uid(),
+          cat: activeCat,
+          qty: cat.defaultQty,
+          measured: false,
+          ...(world ? { world } : { img: imageXY, itemId: item.id }),
+        },
+      ]);
     },
     [item, terrain, mode, activeCat, categories, pins, onPinsChange, config]
   );
@@ -318,6 +323,7 @@ export default function SkraafotoHaveKort({
   /* ---------------------------------------------------------------- Tegning */
 
   const map = mapRef.current;
+  /** Verdenskoordinat -> skærmpixel. */
   const toPixel = (world) => {
     if (!map || !item) return null;
     try {
@@ -327,11 +333,23 @@ export default function SkraafotoHaveKort({
       return null;
     }
   };
+
+  /** Nål -> skærmpixel, uanset om den er gemt i verden eller i billedet. */
+  const pinToPixel = (pin) => {
+    if (pin.world) return toPixel(pin.world);
+    if (pin.img && pin.itemId === item?.id && map) {
+      try {
+        const px = map.getPixelFromCoordinate(pin.img);
+        return px && Number.isFinite(px[0]) ? px : null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  };
   void tick; // gentegn når kortet flytter sig
 
-  const pinPixels = item
-    ? pins.map((p) => ({ pin: p, px: p.world ? toPixel(p.world) : null }))
-    : [];
+  const pinPixels = item ? pins.map((p) => ({ pin: p, px: pinToPixel(p) })) : [];
   const draftPixels = draft.map(toPixel).filter(Boolean);
 
   /* ------------------------------------------------------------------- UI */
@@ -383,7 +401,10 @@ export default function SkraafotoHaveKort({
         </button>
       </div>
 
-      {/* Retning */}
+      {/* Retning. Uden højdemodel hører nålene til ét bestemt foto, så
+          retningen låses til det lodrette billede — det er alligevel det
+          bedste at markere arealer på. */}
+      {canMeasure && (
       <div className="flex flex-wrap gap-2">
         {DIRECTIONS.map((d) => (
           <button
@@ -403,6 +424,7 @@ export default function SkraafotoHaveKort({
           </button>
         ))}
       </div>
+      )}
 
       {/* Værktøj */}
       <div className="flex flex-wrap items-center gap-2">
@@ -417,19 +439,15 @@ export default function SkraafotoHaveKort({
         >
           Sæt nål
         </ToolButton>
-        <ToolButton
-          active={mode === "measure"}
-          disabled={!canMeasure}
-          onClick={() => setMode("measure")}
-          icon={Ruler}
-          brand={brand}
-        >
-          Mål {measuresLength ? "længde" : "areal"}
-        </ToolButton>
-        {!canMeasure && (
-          <span className="text-[15px] text-stone-400">
-            Opmåling kræver adgang til højdemodellen
-          </span>
+        {canMeasure && (
+          <ToolButton
+            active={mode === "measure"}
+            onClick={() => setMode("measure")}
+            icon={Ruler}
+            brand={brand}
+          >
+            Mål {measuresLength ? "længde" : "areal"}
+          </ToolButton>
         )}
       </div>
 
